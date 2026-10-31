@@ -1,0 +1,7 @@
+{
+  "checkpoint_hash": "392cfd89073e0efc7d8ce256444ce53e881b5864a67943c7fe9f6150525f97c8",
+  "signature_algo": "Ed25519",
+  "signature_hex": "617a6f463651ba0264f7ecdb505dc4f69f49fbc745c67fa71ec6d4638c46426495a51f479c8f6653c13057a191507b24a1a53d872ba892f9841b19e05a3a9c0d",
+  "signer_id": "NTH1dsuWdz0lSlnsfXg6nZD4Us9xGBFroqMOdMuCtc0=",
+  "note": "detached signature over raw checkpoint_hash bytes; signature itself is NOT part of the hashed preimage (avoids circularity, per osr21's explicit instruction)"
+}

@@ -1,0 +1,12 @@
+{
+  "checkpoint_hash": "392cfd89073e0efc7d8ce256444ce53e881b5864a67943c7fe9f6150525f97c8",
+  "anchor_ref_bytes32": "0x392cfd89073e0efc7d8ce256444ce53e881b5864a67943c7fe9f6150525f97c8",
+  "chain": "Base mainnet (chainId 8453)",
+  "registry": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+  "tx_hash": "0x1dbff7b7b183b9cf3496646fa4aac52b3267bcfd3982f40847e268ec05f8fbb4",
+  "block": 53311834,
+  "block_timestamp_unix": 1793413015,
+  "anchored_by": "0xDcc84E9798E8eB1b1b48A31B8f35e5AA7b83DBF4",
+  "signed_via": "giskard-signer queue_anchor (owner wallet), executed with explicit creador confirmation (AskUserQuestion) this session, on the corrected (argentum-core-vocabulary) checkpoint_hash",
+  "independent_verification": "re-fetched via eth_getTransactionReceipt against https://mainnet.base.org directly (curl, not trusted from the signer's own report): status 0x1, log topic1 matches checkpoint_hash exactly, log topic2/tx.from match anchored_by exactly"
+}

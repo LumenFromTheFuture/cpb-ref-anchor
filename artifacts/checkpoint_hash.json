@@ -1,0 +1,5 @@
+{
+  "checkpoint_hash": "392cfd89073e0efc7d8ce256444ce53e881b5864a67943c7fe9f6150525f97c8",
+  "anchor_ref_bytes32": "0x392cfd89073e0efc7d8ce256444ce53e881b5864a67943c7fe9f6150525f97c8",
+  "digest_method": "SHA-256 over RFC 8785 JCS canonical form of checkpoint.json"
+}

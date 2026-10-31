@@ -1,0 +1,125 @@
+{
+  "log_scope": "worked-example:checkpoint-producer-binding:demo-log-001",
+  "events": [
+    {
+      "seq": 1,
+      "event_type": "task.received",
+      "payload": {
+        "task_id": "t-001",
+        "kind": "research"
+      },
+      "prev_event_hash": "GENESIS",
+      "event_hash": "46891cf172cccd371499b24d21241d26f3e4920c7df277579927b2bbada13e01"
+    },
+    {
+      "seq": 2,
+      "event_type": "task.planned",
+      "payload": {
+        "task_id": "t-001",
+        "steps": 3
+      },
+      "prev_event_hash": "46891cf172cccd371499b24d21241d26f3e4920c7df277579927b2bbada13e01",
+      "event_hash": "8d7b37dbe4bbe6589260d583c27b835cdfa9e0f5c053be7f6d4113ef6d3abb67"
+    },
+    {
+      "seq": 3,
+      "event_type": "tool.call",
+      "payload": {
+        "tool": "search",
+        "query": "rfc8785 canonicalization"
+      },
+      "prev_event_hash": "8d7b37dbe4bbe6589260d583c27b835cdfa9e0f5c053be7f6d4113ef6d3abb67",
+      "event_hash": "43a2e8b399ddd2cb74e57462514c5f77005a620460cf31472a1e3a53f30bea85"
+    },
+    {
+      "seq": 4,
+      "event_type": "tool.result",
+      "payload": {
+        "tool": "search",
+        "result_count": 7
+      },
+      "prev_event_hash": "43a2e8b399ddd2cb74e57462514c5f77005a620460cf31472a1e3a53f30bea85",
+      "event_hash": "e64343da5b6be58881ba241d21c80525c8b8cef861bcfe4a932c8971f7034450"
+    },
+    {
+      "seq": 5,
+      "event_type": "tool.call",
+      "payload": {
+        "tool": "fetch",
+        "url": "https://example.invalid/doc-1"
+      },
+      "prev_event_hash": "e64343da5b6be58881ba241d21c80525c8b8cef861bcfe4a932c8971f7034450",
+      "event_hash": "d9c2f98c01e3dee25b6fe92111de51412aaced9575fc643faf51639c06959958"
+    },
+    {
+      "seq": 6,
+      "event_type": "tool.result",
+      "payload": {
+        "tool": "fetch",
+        "status": 200
+      },
+      "prev_event_hash": "d9c2f98c01e3dee25b6fe92111de51412aaced9575fc643faf51639c06959958",
+      "event_hash": "9ea375d474dcbeccf10bad7d45bb0ec9500090aaf3e0c2d8a61b53f4fc3f4461"
+    },
+    {
+      "seq": 7,
+      "event_type": "task.step_complete",
+      "payload": {
+        "task_id": "t-001",
+        "step": 1
+      },
+      "prev_event_hash": "9ea375d474dcbeccf10bad7d45bb0ec9500090aaf3e0c2d8a61b53f4fc3f4461",
+      "event_hash": "63a8d31bcf436ff1014036cdc9b9cb5aa6dccef24574aa3624e621d031f2cce8"
+    },
+    {
+      "seq": 8,
+      "event_type": "tool.call",
+      "payload": {
+        "tool": "summarize",
+        "input_tokens": 1842
+      },
+      "prev_event_hash": "63a8d31bcf436ff1014036cdc9b9cb5aa6dccef24574aa3624e621d031f2cce8",
+      "event_hash": "2e0fda997dd26703f7188c3340e19bf20fc8dc5216a2ea721f44c0427397eeee"
+    },
+    {
+      "seq": 9,
+      "event_type": "tool.result",
+      "payload": {
+        "tool": "summarize",
+        "output_tokens": 310
+      },
+      "prev_event_hash": "2e0fda997dd26703f7188c3340e19bf20fc8dc5216a2ea721f44c0427397eeee",
+      "event_hash": "766b55e8c14c1ed3d1762264595f7d700355135d93f94c0e3562ac53933dd92a"
+    },
+    {
+      "seq": 10,
+      "event_type": "task.step_complete",
+      "payload": {
+        "task_id": "t-001",
+        "step": 2
+      },
+      "prev_event_hash": "766b55e8c14c1ed3d1762264595f7d700355135d93f94c0e3562ac53933dd92a",
+      "event_hash": "a505d8aff41a4d76204fabc82a9ab7b5e7d833a7a13800e120876af07ed81e31"
+    },
+    {
+      "seq": 11,
+      "event_type": "task.step_complete",
+      "payload": {
+        "task_id": "t-001",
+        "step": 3
+      },
+      "prev_event_hash": "a505d8aff41a4d76204fabc82a9ab7b5e7d833a7a13800e120876af07ed81e31",
+      "event_hash": "1a29605068ae586b237396c141a558518968cc0f1e509ceb6e27c9a72b128c93"
+    },
+    {
+      "seq": 12,
+      "event_type": "task.completed",
+      "payload": {
+        "task_id": "t-001",
+        "outcome": "ok"
+      },
+      "prev_event_hash": "1a29605068ae586b237396c141a558518968cc0f1e509ceb6e27c9a72b128c93",
+      "event_hash": "0984f7829586e5a457a158f71f46c80b1076623cfd895a558fcd43feea7f1a5e"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "domain": "MYCELIUM-CHECKPOINT-V1",
+  "log_scope": "worked-example:checkpoint-producer-binding:demo-log-001",
+  "first_seq": 1,
+  "last_seq": 12,
+  "event_count": 12,
+  "log_root": "0984f7829586e5a457a158f71f46c80b1076623cfd895a558fcd43feea7f1a5e",
+  "previous_checkpoint_root": null,
+  "signer_type": "agent_keypair",
+  "signer_id": "NTH1dsuWdz0lSlnsfXg6nZD4Us9xGBFroqMOdMuCtc0="
+}
