@@ -1,0 +1,4 @@
+{
+  "expected_result": "REJECT",
+  "reason_code": "LOG_SEQUENCE_GAP"
+}

@@ -1,0 +1,11 @@
+{
+  "domain": "MYCELIUM-CHECKPOINT-V1",
+  "log_scope": "mycelium-checkpoint-negative-fixture",
+  "first_seq": 1,
+  "last_seq": 6,
+  "event_count": 6,
+  "log_root": "8b8136e8524877cfafd80fd90374d19cdab1c54aec76493defc93d86db855535",
+  "previous_checkpoint_root": null,
+  "signer_type": "agent_keypair",
+  "signer_id": "y1FfHzQTEMWo3N442O6X+igLEHEl9jFeI/idGoGvHX4="
+}

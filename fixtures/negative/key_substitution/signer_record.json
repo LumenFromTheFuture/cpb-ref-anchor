@@ -1,0 +1,11 @@
+{
+  "signer_id": "y1FfHzQTEMWo3N442O6X+igLEHEl9jFeI/idGoGvHX4=",
+  "key_id": "checkpoint-signing-key-01",
+  "key_source": "embedded",
+  "public_key_hash": "4a9ee1d3bd513116d21d2120046e5d21f4933a4ead7061204dcb2cc07e0483e3",
+  "signature_input_hash": "1094b746d04e48fce74f769ec2317891e5e65c49aa635b41bd3972fcbeb9954b",
+  "verification_result": "pass",
+  "key_resolution_time": "2026-11-01T00:00:00.000Z",
+  "key_resolution_evidence_hash": null,
+  "public_key_hex": "cb515f1f341310c5a8dcde38d8ee97fa280b107125f6315e23f89d1a81af1d7e"
+}

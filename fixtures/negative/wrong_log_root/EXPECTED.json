@@ -1,0 +1,4 @@
+{
+  "expected_result": "REJECT",
+  "reason_code": "CHECKPOINT_LOG_ROOT_MISMATCH"
+}

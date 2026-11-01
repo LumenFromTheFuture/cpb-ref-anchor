@@ -1,0 +1,40 @@
+{
+  "log_scope": "mycelium-checkpoint-negative-fixture",
+  "events": [
+    {
+      "seq": 1,
+      "event_type": "tool.call",
+      "payload": "demo",
+      "prev_event_hash": "GENESIS",
+      "event_hash": "a1737ca3d6773dd99fb09d9618fd44d28fe809e836986e133d5ca34610638171"
+    },
+    {
+      "seq": 2,
+      "event_type": "tool.call",
+      "payload": "demo",
+      "prev_event_hash": "a1737ca3d6773dd99fb09d9618fd44d28fe809e836986e133d5ca34610638171",
+      "event_hash": "ec4a95fdc1101135bab34e0cadcf6861788a8156bc77a9841649f35defaa354c"
+    },
+    {
+      "seq": 3,
+      "event_type": "tool.call",
+      "payload": "demo",
+      "prev_event_hash": "ec4a95fdc1101135bab34e0cadcf6861788a8156bc77a9841649f35defaa354c",
+      "event_hash": "dc0322cea2f1af1637a1a04eb7285b08c569ddd36bf59571e2665a96e2a4727b"
+    },
+    {
+      "seq": 5,
+      "event_type": "tool.call",
+      "payload": "demo",
+      "prev_event_hash": "dc0322cea2f1af1637a1a04eb7285b08c569ddd36bf59571e2665a96e2a4727b",
+      "event_hash": "45b1bdb38e9f7a0df0445fbd3a989fb50e4896442d1a5be9abf392f0a6d513e1"
+    },
+    {
+      "seq": 6,
+      "event_type": "tool.call",
+      "payload": "demo",
+      "prev_event_hash": "45b1bdb38e9f7a0df0445fbd3a989fb50e4896442d1a5be9abf392f0a6d513e1",
+      "event_hash": "f0bd5a2aecb073baf5b5c8cdbccd62fd66e5c08c7bdad41c2c95b8360b95571e"
+    }
+  ]
+}

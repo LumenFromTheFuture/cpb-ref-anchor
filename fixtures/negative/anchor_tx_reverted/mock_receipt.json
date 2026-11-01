@@ -1,0 +1,7 @@
+{
+  "_fixture_note": "SYNTHETIC -- captured shape only, not a real broadcast tx. No transaction was deliberately reverted to produce this; it exists only to exercise verify_negative.py's own rejection logic.",
+  "status": "0x0",
+  "blockNumber": "0x32dba1a",
+  "from": "0xdcc84e9798e8eb1b1b48a31b8f35e5aa7b83dbf4",
+  "logs": []
+}

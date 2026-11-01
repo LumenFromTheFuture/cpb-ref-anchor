@@ -1,0 +1,4 @@
+{
+  "expected_result": "REJECT",
+  "reason_code": "SIGNATURE_KEY_MISMATCH"
+}
