@@ -99,6 +99,34 @@ def verify_signer_record(checkpoint, checkpoint_hash, signature, signer_record):
     return findings
 
 
+def classify_outcomes(findings, signer_record, anchor_result):
+    """Separate, machine-readable outcomes -- per osr21's point in
+    coinbase/agentkit#1141: a caller must not be able to conflate
+    checkpoint-integrity with producer authentication by reading a single
+    pass/fail. Each outcome is independent; a caller that only checks
+    `signature_valid` (or the overall RESULT) is not checking identity."""
+    outcomes = {
+        "signature_valid": findings["verification_result_recomputed"] == "pass",
+        "checkpoint_key_bound": (
+            findings["public_key_hash_matches"]
+            and findings["signer_identity_bound"]
+            and findings["signature_input_bound"]
+        ),
+        "anchor_inclusion_verified": anchor_result is not None,
+    }
+    if signer_record.get("key_source") == "pinned_registry":
+        # not implemented in this worked example -- no registry resolver wired
+        # up yet, so even this key_source can't claim a resolved identity here.
+        outcomes["identity_authenticated"] = None  # unknown, not false: resolver absent, not failed
+    else:
+        # embedded / published_jwks / cached_prior: the key was chosen by
+        # whoever produced the checkpoint, not by an independent trust
+        # source. No value of signature_valid, checkpoint_key_bound, or
+        # anchor_inclusion_verified can change this.
+        outcomes["identity_authenticated"] = False
+    return outcomes
+
+
 def rpc_get_receipt(tx_hash):
     body = json.dumps(
         {"jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionReceipt", "params": [tx_hash]}
@@ -169,6 +197,7 @@ def main(artifacts_dir="artifacts", tx_hash=None):
 
     all_local_ok = all(v in (True, "pass") for v in findings.values())
 
+    anchor = None
     if tx_hash:
         anchor = verify_anchor(recomputed_hash, tx_hash)
         print()
@@ -179,6 +208,17 @@ def main(artifacts_dir="artifacts", tx_hash=None):
     else:
         print()
         print("[skip] no tx_hash given -- not anchored yet, on-chain check skipped")
+
+    outcomes = classify_outcomes(findings, signer_record, anchor)
+    print()
+    print("OUTCOMES (read these independently -- do not collapse to one RESULT):")
+    for k, v in outcomes.items():
+        print(f"  {k}: {v}")
+    if outcomes["identity_authenticated"] is False:
+        print("  -> identity_authenticated is False regardless of the other three:")
+        print("     this signer_record's key_source cannot be resolved against an")
+        print("     independent trust source. Only a configured key_source='pinned_registry'")
+        print("     binding -- not implemented here -- could change that.")
 
     print()
     print("RESULT:", "PASS" if all_local_ok else "FAIL")
