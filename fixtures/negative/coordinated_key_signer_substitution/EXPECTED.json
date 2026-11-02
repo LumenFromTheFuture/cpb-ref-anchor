@@ -1,0 +1,5 @@
+{
+  "expected_result": "REJECT",
+  "reason_code": "ANCHOR_CHECKPOINT_MISMATCH",
+  "local_checks_expected": "ALL PASS -- self-consistency alone does not detect this substitution"
+}

@@ -1,7 +1,9 @@
-"""Runs the six negative fixtures under fixtures/negative/ and asserts each
+"""Runs the seven negative fixtures under fixtures/negative/ and asserts each
 is rejected with its documented reason code — requested by osr21
 (coinbase/agentkit#1141) after reviewing this repo's positive-path worked
-example.
+example. The 7th (coordinated_key_signer_substitution) is a 6th-round
+follow-up asking specifically what distinguishes a self-consistent but
+substituted identity from a real one.
 
 Same discipline as verify.py: every fixture is recomputed from scratch here,
 never trusted from a cached field (a fixture's own signer_record.verification_result
@@ -145,6 +147,59 @@ def check_anchor_wrong_event(base: str):
     raise AssertionError("no Anchored log found in the real tx at all -- fixture setup is wrong")
 
 
+def check_coordinated_key_signer_substitution(base: str):
+    """osr21's 6th-round follow-up: key B, signer_id=B, signed by B --
+    everything LOCAL is self-consistent on purpose. First confirms that
+    (the point of the fixture: self-consistency alone proves nothing about
+    identity), then checks the real already-anchored tx and expects THAT
+    to be where it finally breaks."""
+    checkpoint = load(f"{base}/checkpoint.json")
+    checkpoint_hash_doc = load(f"{base}/checkpoint_hash.json")
+    signature = load(f"{base}/signature.json")
+    signer_record = load(f"{base}/signer_record.json")
+    tx_doc = load(f"{base}/real_tx.json")
+
+    recomputed_hash = hashlib.sha256(rfc8785.dumps(checkpoint)).hexdigest()
+    assert recomputed_hash == checkpoint_hash_doc["checkpoint_hash"]
+
+    pub_raw = base64.b64decode(signer_record["signer_id"])
+    pub = Ed25519PublicKey.from_public_bytes(pub_raw)
+    checkpoint_hash_bytes = bytes.fromhex(recomputed_hash)
+    try:
+        pub.verify(bytes.fromhex(signature["signature_hex"]), checkpoint_hash_bytes)
+    except InvalidSignature:
+        raise AssertionError("fixture is broken: signature should verify locally (that's the point)")
+
+    local_checks = {
+        "key_source_declared": signer_record.get("key_source") in ("embedded", "published_jwks", "pinned_registry", "cached_prior"),
+        "public_key_hash_matches": hashlib.sha256(pub_raw).hexdigest() == signer_record["public_key_hash"],
+        "signer_identity_bound": signer_record["signer_id"] == checkpoint["signer_id"],
+        "signature_input_bound": hashlib.sha256(checkpoint_hash_bytes).hexdigest() == signer_record["signature_input_hash"],
+    }
+    if not all(local_checks.values()):
+        raise AssertionError(f"fixture is broken: expected all local checks to pass, got {local_checks}")
+    print(f"       local checks (all pass, as expected): {local_checks}")
+
+    # Only now check against the REAL already-anchored tx -- this is where
+    # a coordinated-but-different checkpoint actually gets caught.
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionReceipt", "params": [tx_doc["tx_hash"]]}).encode()
+    req = urllib.request.Request(
+        RPC, data=body,
+        headers={"Content-Type": "application/json", "User-Agent": "checkpoint-producer-binding-verify-negative/1.0"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        receipt = json.loads(resp.read())["result"]
+
+    for log in receipt["logs"]:
+        if log["address"].lower() == REGISTRY.lower() and log["topics"][0].lower() == ANCHORED_TOPIC0:
+            ref_onchain = log["topics"][1][2:]
+            if ref_onchain.lower() != recomputed_hash.lower():
+                raise Rejection("ANCHOR_CHECKPOINT_MISMATCH", f"this checkpoint's hash {recomputed_hash} was never anchored by {tx_doc['tx_hash']} (on-chain ref there is {ref_onchain})")
+            raise AssertionError("fixture is broken: hash unexpectedly matched the real anchor")
+    raise AssertionError("no Anchored log found in the real tx -- fixture setup is wrong")
+
+
 CASES = {
     "key_substitution": check_key_substitution,
     "sequence_gap": check_sequence_gap,
@@ -152,6 +207,7 @@ CASES = {
     "wrong_log_root": check_wrong_log_root,
     "anchor_tx_reverted": check_anchor_tx_reverted,
     "anchor_wrong_event": check_anchor_wrong_event,
+    "coordinated_key_signer_substitution": check_coordinated_key_signer_substitution,
 }
 
 

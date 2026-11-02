@@ -11,14 +11,25 @@ scratch and asserts the expected reason code fires.
 
 Six cases cover osr21's four requested classes (two of the four split into
 two reason codes each, since "gaps / reordering" and "reverted / wrong
-event" are structurally distinct failures that deserve distinct codes):
+event" are structurally distinct failures that deserve distinct codes). A
+7th case (6th-round follow-up) covers a coordinated key+signer_id+signature
+substitution -- self-consistent locally, only caught against the real anchor:
 
-  key_substitution     -- SIGNATURE_KEY_MISMATCH
-  sequence_gap         -- LOG_SEQUENCE_GAP
-  sequence_reorder     -- LOG_SEQUENCE_REORDERED
-  wrong_log_root        -- CHECKPOINT_LOG_ROOT_MISMATCH
-  anchor_tx_reverted    -- ANCHOR_TX_REVERTED
-  anchor_wrong_event    -- ANCHOR_EVENT_MISMATCH
+  key_substitution                     -- SIGNATURE_KEY_MISMATCH
+  sequence_gap                         -- LOG_SEQUENCE_GAP
+  sequence_reorder                     -- LOG_SEQUENCE_REORDERED
+  wrong_log_root                        -- CHECKPOINT_LOG_ROOT_MISMATCH
+  anchor_tx_reverted                    -- ANCHOR_TX_REVERTED
+  anchor_wrong_event                    -- ANCHOR_EVENT_MISMATCH
+  coordinated_key_signer_substitution   -- ANCHOR_CHECKPOINT_MISMATCH
+
+NOT IDEMPOTENT: key_substitution, wrong_log_root, and
+coordinated_key_signer_substitution each generate a fresh Ed25519 key with
+Ed25519PrivateKey.generate() -- re-running this script changes their
+committed hashes/keys. Already-committed fixtures are cited externally
+(coinbase/agentkit#1141); re-run only to ADD a new case, then `git checkout
+--` any already-committed fixture directory this run touched before
+committing, exactly as done when adding the 7th case here.
 
 Run:
     python scripts/generate_negative_fixtures.py
@@ -232,6 +243,65 @@ def gen_anchor_wrong_event():
     print("anchor_wrong_event: real tx", REAL_ANCHOR_TX, "checked against wrong hash", wrong_hash)
 
 
+# --- 7. coordinated_key_signer_substitution: osr21's follow-up (6th round,
+#        coinbase/agentkit#1141) -- not a signature-only substitution
+#        (key_substitution already covers that). Here key B is generated,
+#        signer_id is set to key B, and the signature is produced by key B:
+#        every LOCAL field is internally consistent. The point is that
+#        self-consistency alone proves nothing about identity -- it only
+#        breaks when checked against the REAL already-anchored tx, because
+#        this is a DIFFERENT checkpoint than the one that tx anchored. ---
+def gen_coordinated_key_signer_substitution():
+    priv_b = Ed25519PrivateKey.generate()
+    pub_b_raw = priv_b.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    signer_id_b = base64.b64encode(pub_b_raw).decode()
+
+    events = build_clean_chain(6)
+    preimage = {
+        "domain": DOMAIN,
+        "log_scope": "mycelium-checkpoint-negative-fixture",
+        "first_seq": events[0]["seq"],
+        "last_seq": events[-1]["seq"],
+        "event_count": len(events),
+        "log_root": events[-1]["event_hash"],
+        "previous_checkpoint_root": None,
+        "signer_type": "agent_keypair",
+        "signer_id": signer_id_b,  # key B, declared honestly -- no mismatch here
+    }
+    checkpoint_hash = hashlib.sha256(jcs(preimage)).hexdigest()
+    checkpoint_hash_bytes = bytes.fromhex(checkpoint_hash)
+    sig = priv_b.sign(checkpoint_hash_bytes)  # signed by B -- matches signer_id
+
+    signer_record = {
+        "signer_id": signer_id_b,
+        "key_id": "checkpoint-signing-key-B",
+        "key_source": "embedded",
+        "public_key_hash": hashlib.sha256(pub_b_raw).hexdigest(),
+        "signature_input_hash": hashlib.sha256(checkpoint_hash_bytes).hexdigest(),
+        "verification_result": "pass",  # true this time -- not a trap like key_substitution
+        "key_resolution_time": "2026-11-01T00:00:00.000Z",
+        "key_resolution_evidence_hash": None,
+        "public_key_hex": pub_b_raw.hex(),
+    }
+
+    base = f"{OUT}/coordinated_key_signer_substitution"
+    write(f"{base}/log.json", mk_log(events))
+    write(f"{base}/checkpoint.json", preimage)
+    write(f"{base}/checkpoint_hash.json", {"checkpoint_hash": checkpoint_hash, "anchor_ref_bytes32": "0x" + checkpoint_hash})
+    write(f"{base}/signature.json", {"checkpoint_hash": checkpoint_hash, "signature_algo": "Ed25519", "signature_hex": sig.hex(), "signer_id": signer_id_b})
+    write(f"{base}/signer_record.json", signer_record)
+    # the REAL already-anchored tx -- no new anchor, same real one reused everywhere else
+    write(f"{base}/real_tx.json", {"tx_hash": REAL_ANCHOR_TX, "note": "the real anchor tx from this repo's positive path -- reused, not re-anchored"})
+    write(f"{base}/EXPECTED.json", {
+        "expected_result": "REJECT",
+        "reason_code": "ANCHOR_CHECKPOINT_MISMATCH",
+        "local_checks_expected": "ALL PASS -- self-consistency alone does not detect this substitution",
+    })
+    print("coordinated_key_signer_substitution:", checkpoint_hash, "(fully self-consistent; only fails against the real anchor)")
+
+
 if __name__ == "__main__":
     gen_key_substitution()
     gen_sequence_gap()
@@ -239,3 +309,4 @@ if __name__ == "__main__":
     gen_wrong_log_root()
     gen_anchor_tx_reverted()
     gen_anchor_wrong_event()
+    gen_coordinated_key_signer_substitution()

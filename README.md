@@ -59,7 +59,7 @@ event_1 → event_2 → ... → event_12          (seq + prev_event_hash chain)
 | `scripts/anchor.sh` | Equivalent `cast` command to anchor `checkpoint_hash`. |
 | `verifier/verify.py` | Independent, from-scratch verifier: recomputes the log chain, recomputes `checkpoint_hash`, verifies the signature, checks `signer_record` against `verifier-key-source-ref-v1.md`'s invariants, and (once anchored) re-fetches the `Anchored` event directly from Base mainnet RPC and reports `anchor_submitter` as a role separate from `signer_id`. |
 | `artifacts/` | `log.json`, `checkpoint.json`, `checkpoint_hash.json`, `signature.json`, `signer_record.json`, and (once anchored) `anchor.json`. |
-| `scripts/generate_negative_fixtures.py` / `fixtures/negative/` / `verifier/verify_negative.py` | Six deliberately broken artifact sets + a from-scratch verifier that asserts each is rejected with its own reason code. See below. |
+| `scripts/generate_negative_fixtures.py` / `fixtures/negative/` / `verifier/verify_negative.py` | Seven deliberately broken artifact sets + a from-scratch verifier that asserts each is rejected with its own reason code. See below. |
 | `PROVENANCE.md` | Full honesty statement, including the convergence claim with exact commit hashes/dates — read it. |
 
 ## Negative fixtures
@@ -81,12 +81,44 @@ verifier must not read that):
 | `wrong_log_root` | `CHECKPOINT_LOG_ROOT_MISMATCH` | Checkpoint's `log_root` points at an earlier event's hash, not the log's real tip. |
 | `anchor_tx_reverted` | `ANCHOR_TX_REVERTED` | A synthetic captured receipt (`status: "0x0"`) — labeled as synthetic in the fixture itself; nothing was deliberately reverted on-chain to produce this. |
 | `anchor_wrong_event` | `ANCHOR_EVENT_MISMATCH` | Reuses this repo's real, already-anchored tx (`artifacts/anchor.json`) but checks it against a `checkpoint_hash` it did *not* anchor — the chain data is real, the fixture's expectation is deliberately wrong. |
+| `coordinated_key_signer_substitution` | `ANCHOR_CHECKPOINT_MISMATCH` | A fresh key B, `signer_id = key B`, signed by key B — every local field is internally consistent. See below. |
 
 `sequence_gap` and `sequence_reorder` are built so the hash chain itself
 stays valid (every link positionally correct) — isolating "the claimed
 numbering has a hole / goes backwards" from "the chain was tampered with",
 which is a different failure (`LOG_CHAIN_BREAK` / `LOG_EVENT_HASH_MISMATCH`,
-also implemented, just not one of the six named cases here).
+also implemented, just not one of the seven named cases here).
+
+### `coordinated_key_signer_substitution` — osr21's follow-up (7th case, 6th round)
+
+osr21's exact ask, quoted: *"replace the embedded public key and re-sign
+the checkpoint with that key, while keeping the claimed signer_id and
+other fields unchanged."* Not a signature-only swap (`key_substitution`
+already covers that) — here key, `signer_id`, and signature are all
+replaced *together*, consistently. Running the local checks alone
+(`key_source_declared`, `public_key_hash_matches`, `signer_identity_bound`,
+`signature_input_bound`, the recomputed Ed25519 verification) gives **all
+pass** — `verifier/verify_negative.py` prints this explicitly before
+checking anything on-chain. Nothing about the record alone distinguishes
+it from a legitimate signer.
+
+It only breaks against the real, already-anchored tx
+(`0x1dbff7b7b183b9cf3496646fa4aac52b3267bcfd3982f40847e268ec05f8fbb4`,
+reused, not re-anchored): that tx's `Anchored` log carries a different
+`checkpoint_hash` — this one was never anchored by it. This is exactly the
+three scenarios osr21 named, demonstrated in one fixture:
+
+1. **`key_source = "embedded"`** — self-consistent by construction, proves
+   nothing about identity on its own. This fixture's local-checks pass is
+   the demonstration.
+2. **Fingerprint committed in an anchored preimage** — breaks the match
+   the moment the claim is checked against what was actually anchored.
+   This fixture's `ANCHOR_CHECKPOINT_MISMATCH` is the demonstration.
+3. **`key_source = "pinned_registry"`** — not implemented in this worked
+   example (no independent registry exists here to pin against); named as
+   a future case, not built. A real deployment wanting this third
+   guarantee would need that registry as a fourth party, which this
+   worked example doesn't have.
 
 ```bash
 python3 scripts/generate_negative_fixtures.py
