@@ -104,7 +104,20 @@ def classify_outcomes(findings, signer_record, anchor_result):
     coinbase/agentkit#1141: a caller must not be able to conflate
     checkpoint-integrity with producer authentication by reading a single
     pass/fail. Each outcome is independent; a caller that only checks
-    `signature_valid` (or the overall RESULT) is not checking identity."""
+    `signature_valid` (or the overall RESULT) is not checking identity.
+
+    Tri-state semantics, per osr21's follow-up in the same thread: False
+    means checked and not satisfied; None means not evaluated/unknown (no
+    value here implies a check that silently passed). `anchor_finality` is
+    a string state for the same reason `anchor_inclusion_verified` is kept
+    separate: `anchor_inclusion_verified=True` only means the expected
+    on-chain log was found in a receipt with status success -- it says
+    nothing about whether that inclusion has reached this chain's actual
+    finality condition. Base is an OP-stack rollup: its real finality
+    comes from the L1 fault-proof/dispute-game window, not from
+    confirmation count. This verifier does not implement that check, so it
+    never reports "finalized" -- doing so without checking it would be the
+    same kind of overclaim this function exists to prevent."""
     outcomes = {
         "signature_valid": findings["verification_result_recomputed"] == "pass",
         "checkpoint_key_bound": (
@@ -113,6 +126,7 @@ def classify_outcomes(findings, signer_record, anchor_result):
             and findings["signature_input_bound"]
         ),
         "anchor_inclusion_verified": anchor_result is not None,
+        "anchor_finality": "unseen" if anchor_result is None else "included",
     }
     if signer_record.get("key_source") == "pinned_registry":
         # not implemented in this worked example -- no registry resolver wired
@@ -219,6 +233,11 @@ def main(artifacts_dir="artifacts", tx_hash=None):
         print("     this signer_record's key_source cannot be resolved against an")
         print("     independent trust source. Only a configured key_source='pinned_registry'")
         print("     binding -- not implemented here -- could change that.")
+    if outcomes["anchor_finality"] == "included":
+        print("  -> anchor_finality is 'included', never 'finalized', in this verifier:")
+        print("     Base's real finality is the L1 fault-proof/dispute-game window, not")
+        print("     confirmation count. This verifier only confirmed a success receipt --")
+        print("     it does not check that window, so it does not claim finality.")
 
     print()
     print("RESULT:", "PASS" if all_local_ok else "FAIL")
