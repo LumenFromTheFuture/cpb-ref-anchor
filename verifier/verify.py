@@ -141,10 +141,8 @@ def classify_outcomes(findings, signer_record, anchor_result):
     return outcomes
 
 
-def rpc_get_receipt(tx_hash):
-    body = json.dumps(
-        {"jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionReceipt", "params": [tx_hash]}
-    ).encode()
+def _rpc(method, params):
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
     req = urllib.request.Request(
         RPC,
         data=body,
@@ -153,6 +151,21 @@ def rpc_get_receipt(tx_hash):
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())["result"]
+
+
+def rpc_get_receipt(tx_hash):
+    return _rpc("eth_getTransactionReceipt", [tx_hash])
+
+
+def rpc_chain_id():
+    return int(_rpc("eth_chainId", []), 16)
+
+
+def rpc_get_block_hash(block_number):
+    """Current canonical block hash at block_number, or None if that height
+    no longer resolves at all (distinct from resolving to a different hash)."""
+    block = _rpc("eth_getBlockByNumber", [hex(block_number), False])
+    return block["hash"] if block else None
 
 
 def verify_anchor(checkpoint_hash, tx_hash):
@@ -169,10 +182,28 @@ def verify_anchor(checkpoint_hash, tx_hash):
     assert ref_onchain.lower() == checkpoint_hash.lower(), "on-chain ref != checkpoint_hash"
     anchor_submitter = "0x" + matched["topics"][2][-40:]
     return {
+        "chain_id": rpc_chain_id(),
+        "tx_hash": tx_hash,
         "block": int(receipt["blockNumber"], 16),
+        "block_hash": receipt["blockHash"],
         "anchor_submitter": anchor_submitter,
         "tx_from": receipt["from"],
     }
+
+
+def recheck_inclusion(block_number, recorded_block_hash):
+    """Per osr21's point: 'included' is an observation at a specific chain
+    point, not a durable guarantee. This re-queries the CURRENT canonical
+    block hash at block_number and compares it to what was recorded at the
+    time of the original observation -- 'included' if they still match,
+    'reorged' if a different block now sits at that height, 'unknown' if
+    the height no longer resolves. It does not run automatically; a caller
+    invokes it later to find out whether a prior 'included' result still
+    holds."""
+    current_hash = rpc_get_block_hash(block_number)
+    if current_hash is None:
+        return "unknown"
+    return "included" if current_hash.lower() == recorded_block_hash.lower() else "reorged"
 
 
 def main(artifacts_dir="artifacts", tx_hash=None):
@@ -216,9 +247,14 @@ def main(artifacts_dir="artifacts", tx_hash=None):
         anchor = verify_anchor(recomputed_hash, tx_hash)
         print()
         print(f"[ok] on-chain Anchored event confirmed at block {anchor['block']}")
+        print(f"     chain_id             : {anchor['chain_id']}")
+        print(f"     tx_hash              : {anchor['tx_hash']}")
+        print(f"     block_hash           : {anchor['block_hash']}")
         print(f"     checkpoint signer_id : {checkpoint['signer_id']}  (role: who produced/signed the log)")
         print(f"     anchor_submitter     : {anchor['anchor_submitter']}  (role: who paid gas / submitted the anchor tx)")
         print("     -> tracked and verified as SEPARATE roles, per osr21's point 2.")
+        print("     -> this is an observation at this chain point, not a durable guarantee --")
+        print("        recheck_inclusion(block, block_hash) later re-verifies it still holds.")
     else:
         print()
         print("[skip] no tx_hash given -- not anchored yet, on-chain check skipped")
