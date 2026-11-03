@@ -77,3 +77,16 @@ apply (`key_source_declared`, `signature_input_bound`,
   its output rather than letting a reader infer something stronger.
 - `log.json` is fabricated example data (task/tool-call events), chosen
   only to exercise the hash-chain + checkpoint pattern.
+
+## Future work (not implemented here)
+
+Per osr21's follow-up on `anchor_finality` (2026-11-03): this verifier
+only ever reports `unseen` or `included` — it checks a single L2 success
+receipt and nothing past that, so it never claims finality. If a future
+version adds more chain evidence, osr21's design note is: don't collapse
+it into one generic `finalized` state. Make the assurance stage explicit
+(L2 receipt inclusion, L1 batch inclusion, L1 block finality, fault-proof/
+withdrawal-finality condition), record the policy/version used, let the
+consumer choose the required level, and make status transitions
+reorg-aware (`included` → `reorged` if the observed inclusion stops being
+canonical). Not built now — recorded so it isn't lost before it's needed.
