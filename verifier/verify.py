@@ -11,6 +11,7 @@ coinbase/agentkit#1141: "record the on-chain anchor caller separately as
 anchor_submitter -- it may be a relayer, not the log producer."
 """
 import base64
+import datetime
 import hashlib
 import json
 import sys
@@ -191,19 +192,57 @@ def verify_anchor(checkpoint_hash, tx_hash):
     }
 
 
-def recheck_inclusion(block_number, recorded_block_hash):
+def recheck_inclusion(block_number, recorded_block_hash, recorded_chain_id):
     """Per osr21's point: 'included' is an observation at a specific chain
     point, not a durable guarantee. This re-queries the CURRENT canonical
-    block hash at block_number and compares it to what was recorded at the
-    time of the original observation -- 'included' if they still match,
-    'reorged' if a different block now sits at that height, 'unknown' if
-    the height no longer resolves. It does not run automatically; a caller
-    invokes it later to find out whether a prior 'included' result still
-    holds."""
+    chain_id and block hash at block_number and compares them to what was
+    recorded at the time of the original observation.
+
+    Returns a dict, not a bare status, so a caller can see WHEN the check
+    ran and WHAT it checked, not just the verdict:
+        {"status": "included" | "reorged" | "unknown",
+         "checked_at": <ISO-8601 UTC timestamp of this call>,
+         "chain_id": <chain_id read just now, or recorded_chain_id if unread>,
+         "block": block_number}
+
+    status is 'unknown' whenever the comparison itself cannot be trusted --
+    not just when the block height no longer resolves, but also when the
+    RPC endpoint's chain_id does not match recorded_chain_id. This is
+    checked FIRST, before any block_hash comparison runs: nothing confirms
+    this endpoint actually speaks for the recorded chain at all, so no
+    included/reorged verdict is produced from it -- the function fails to
+    'unknown' instead of answering based on an endpoint that was never
+    confirmed to be the right one. 'included' is returned only when both
+    chain identity and block hash are confirmed fresh, right now; a caller
+    must never treat a past 'included' result as still current without
+    calling this again -- checked_at exists precisely so that staleness is
+    checkable instead of assumed away.
+
+    This function does not impose a staleness policy of its own -- it
+    does not decide how old is too old, same as this repo never collapses
+    a check it did run into a stronger claim than what it actually
+    verified (see anchor_finality above: 'included', never 'finalized',
+    because the fault-proof window was never checked). What it guarantees
+    is narrower and absolute: the status it returns is never older than
+    checked_at, and it is 'unknown' rather than a stale 'included' whenever
+    chain identity or the block itself cannot be confirmed at call time.
+    It does not run automatically; a caller invokes it later to find out
+    whether a prior 'included' result still holds."""
+    checked_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    current_chain_id = rpc_chain_id()
+    if current_chain_id != recorded_chain_id:
+        return {"status": "unknown", "checked_at": checked_at,
+                "chain_id": current_chain_id, "block": block_number,
+                "reason": f"chain_id mismatch: expected {recorded_chain_id}, RPC reports {current_chain_id}"}
     current_hash = rpc_get_block_hash(block_number)
     if current_hash is None:
-        return "unknown"
-    return "included" if current_hash.lower() == recorded_block_hash.lower() else "reorged"
+        return {"status": "unknown", "checked_at": checked_at,
+                "chain_id": current_chain_id, "block": block_number,
+                "reason": "block height does not resolve"}
+    status = "included" if current_hash.lower() == recorded_block_hash.lower() else "reorged"
+    return {"status": status, "checked_at": checked_at,
+            "chain_id": current_chain_id, "block": block_number,
+            "block_hash": current_hash}
 
 
 def main(artifacts_dir="artifacts", tx_hash=None):
