@@ -90,3 +90,19 @@ withdrawal-finality condition), record the policy/version used, let the
 consumer choose the required level, and make status transitions
 reorg-aware (`included` → `reorged` if the observed inclusion stops being
 canonical). Not built now — recorded so it isn't lost before it's needed.
+
+Per osr21's round-13 follow-up (2026-11-05): a single RPC endpoint's
+agreement with the recorded `chain_id`/`block_hash` proves only what that
+endpoint reports, not independently that its view is canonical.
+`recheck_inclusion_multi_rpc()` (built for this round) corroborates the
+same comparison across several independently-operated endpoints instead
+of trusting one. osr21 named a second, stronger path not built here:
+verifying headers/receipts through a light-client or Merkle proof path
+against an independently-derivable chain commitment, rather than trusting
+any RPC's self-reported answer at all. That requires a light-client
+implementation (header-chain sync and verification, or a proof scheme
+over L1 state) this worked example does not have — a materially larger
+build than a verifier script, out of proportion to this example's scope.
+Not built now, same discipline as everything else in this section:
+recorded so the gap is explicit rather than quietly left for the
+multi-RPC mode to be mistaken for a complete answer to it.

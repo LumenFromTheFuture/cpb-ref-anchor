@@ -57,10 +57,41 @@ event_1 → event_2 → ... → event_12          (seq + prev_event_hash chain)
 | `scripts/generate_log.py` | Builds the synthetic 12-event hash-chained log. |
 | `scripts/build_checkpoint.py` | Generates the Ed25519 sample key, builds the checkpoint preimage (`signing-trust-ref.md` vocabulary), computes `checkpoint_hash`, produces the detached signature and the `signer_record` (`verifier-key-source-ref-v1.md` shape). |
 | `scripts/anchor.sh` | Equivalent `cast` command to anchor `checkpoint_hash`. |
-| `verifier/verify.py` | Independent, from-scratch verifier: recomputes the log chain, recomputes `checkpoint_hash`, verifies the signature, checks `signer_record` against `verifier-key-source-ref-v1.md`'s invariants, and (once anchored) re-fetches the `Anchored` event directly from Base mainnet RPC and reports `anchor_submitter` as a role separate from `signer_id`. |
+| `verifier/verify.py` | Independent, from-scratch verifier: recomputes the log chain, recomputes `checkpoint_hash`, verifies the signature, checks `signer_record` against `verifier-key-source-ref-v1.md`'s invariants, and (once anchored) re-fetches the `Anchored` event directly from Base mainnet RPC and reports `anchor_submitter` as a role separate from `signer_id`. Also carries `recheck_inclusion()` and `recheck_inclusion_multi_rpc()` — see "Trust boundaries of the on-chain check" below. |
 | `artifacts/` | `log.json`, `checkpoint.json`, `checkpoint_hash.json`, `signature.json`, `signer_record.json`, and (once anchored) `anchor.json`. |
 | `scripts/generate_negative_fixtures.py` / `fixtures/negative/` / `verifier/verify_negative.py` | Seven deliberately broken artifact sets + a from-scratch verifier that asserts each is rejected with its own reason code. See below. |
+| `verifier/verify_recheck.py` / `verifier/verify_recheck_multi.py` | Test the two freshness/trust-boundary modes described below against the real anchor tx. |
 | `PROVENANCE.md` | Full honesty statement, including the convergence claim with exact commit hashes/dates — read it. |
+
+## Trust boundaries of the on-chain check
+
+`verify_anchor()`'s on-chain check — and `recheck_inclusion()`, which
+re-verifies it later — are **trusted-RPC verification**: they prove what
+one configured RPC endpoint reports about `chain_id` and the block hash
+at a given height, not independently that this endpoint's view is
+canonical. osr21 named this explicitly (`coinbase/agentkit#1141`, round
+13, 2026-11-05): *"matching chain_id and a block hash from one endpoint
+proves what that endpoint reports, not independently that the view is
+canonical."*
+
+`recheck_inclusion_multi_rpc()` is a stronger assurance mode for the same
+comparison: it queries several endpoints — meant to be run by distinct
+operators — and only returns `included`/`reorged` once enough of them
+(`min_endpoints`, default 2) independently agree. An endpoint that errors
+or reports the wrong `chain_id` is excluded from the count, never a vote
+either way; endpoints that disagree with each other produce `unknown`,
+never a resolved verdict in favor of either side. This directly covers
+osr21's fixture request — a consistently dishonest endpoint reporting
+the right `chain_id` but a fabricated block view cannot force a false
+`included` (it is outnumbered) or a false `reorged` (disagreement is
+never resolved) — see `verifier/verify_recheck_multi.py`.
+
+Two limits stated rather than left implicit: this mode still does not
+verify headers or receipts through a light-client or proof path (see
+`PROVENANCE.md`, "Future work"), and it cannot detect collusion between
+the configured endpoints themselves — corroboration raises the bar past
+trusting a single RPC, it does not remove the need to configure
+endpoints that are genuinely independently operated.
 
 ## Negative fixtures
 
