@@ -11,8 +11,13 @@ endpoint that reports the expected chain ID but a fabricated block view."
 Every [LIVE-RPC EVIDENCE] case below makes real RPC calls to real,
 independently-operated Base mainnet endpoints (mainnet.base.org -- the
 Base protocol team's own node -- and base.drpc.org -- dRPC, a distinct
-operator; both were cross-checked against four more public endpoints
-before writing this file, all seven agreed on REAL_ANCHOR_BLOCK_HASH).
+operator; both were cross-checked against five more public endpoints
+(base.publicnode.com, base-rpc.publicnode.com, 1rpc.io/base,
+base-mainnet.public.blastapi.io, base.gateway.tenderly.co) before writing
+this file -- all seven agreed on REAL_ANCHOR_BLOCK_HASH. An eighth
+endpoint tried (endpoints.omniatech.io) errored and was excluded, not
+counted toward either side, same discipline this file's own
+recheck_inclusion_multi_rpc() applies to an unreachable endpoint.
 [SIMULATED / UNIT COVERAGE] cases cannot be produced by real endpoints on
 demand (we cannot make Base mainnet reorg, nor make a real operator lie,
 nor make a real endpoint go offline on a schedule) -- those substitute a
