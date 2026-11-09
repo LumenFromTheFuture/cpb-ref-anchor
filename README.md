@@ -94,8 +94,10 @@ result = recheck_inclusion_multi_rpc(
 `min_endpoints` retains its existing name but counts **distinct qualifying
 operators**. IDs are trimmed, casefolded ASCII slugs containing letters,
 digits, `.`, `_`, or `-`. `Provider-A` and ` provider-a ` are one operator.
-Missing/blank/invalid IDs contribute **zero**, not one shared "unknown"
-vote. Legacy `(alias, query_fn)` pairs remain callable but have no operator
+Missing/blank/invalid IDs and the reserved ID `unknown` (after trimming and
+casefolding) contribute **zero**, not one shared "unknown" vote. A longer ID
+such as `unknown-provider` is not reserved. Legacy `(alias, query_fn)` pairs
+remain callable but have no operator
 identity; two such entries plus one identified operator do not make a
 two-operator quorum. Migrate those callers to explicit triples.
 

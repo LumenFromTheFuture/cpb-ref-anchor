@@ -10,6 +10,9 @@ def _operator_id(value):
     if not isinstance(value, str):
         return None
     normalized = value.strip().casefold()
+    # A reserved diagnostic bucket is not a configured operator identity.
+    if normalized == "unknown":
+        return None
     allowed = "abcdefghijklmnopqrstuvwxyz0123456789._-"
     return normalized if normalized and all(c in allowed for c in normalized) else None
 
@@ -42,8 +45,9 @@ def recheck_inclusion_multi_rpc(block_number, recorded_block_hash, recorded_chai
 
     min_endpoints retains its API name but now counts distinct normalized
     operator IDs, never URLs or labels. IDs are trimmed and casefolded ASCII
-    slugs (letters, digits, dot, underscore, hyphen); missing/invalid IDs do not
-    qualify. The configuration's identity mapping is assumed, not authenticated.
+    slugs (letters, digits, dot, underscore, hyphen); missing/invalid IDs and
+    the reserved ID "unknown" do not qualify. The configuration's identity
+    mapping is assumed, not authenticated.
 
     All reachable, correct-chain, well-formed hash observations must agree,
     including multiple URLs for one operator and entries with unknown identity.

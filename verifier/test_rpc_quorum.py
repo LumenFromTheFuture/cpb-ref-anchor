@@ -53,6 +53,43 @@ class OperatorQuorumTests(unittest.TestCase):
                 self.assertEqual(result["status"], "unknown")
                 self.assertEqual(result["operators_qualifying"], 0)
 
+    def test_reserved_unknown_id_never_counts_after_normalization(self):
+        for reserved in ("unknown", " UNKNOWN ", "UnKnOwN"):
+            with self.subTest(operator=reserved):
+                result = check([endpoint("unknown", reserved), endpoint("a", "provider-a")])
+                self.assertEqual(result["status"], "unknown")
+                self.assertEqual(result["reason_code"], "insufficient_operators")
+                self.assertEqual(result["operators_qualifying"], 1)
+                self.assertEqual(result["operator_ids_qualifying"], ["provider-a"])
+                self.assertEqual(result["quorum_operator_ids"], [])
+                self.assertIsNone(result["reports"][0]["operator_id"])
+                self.assertFalse(result["reports"][0]["counts_toward_quorum"])
+                self.assertEqual(result["reports"][0]["exclusion_reason"], "operator_identity_unknown")
+                self.assertEqual(check([endpoint("unknown", reserved)], 1)["status"], "unknown")
+
+    def test_reserved_unknown_agrees_but_only_named_operators_make_quorum(self):
+        result = check([endpoint("a", "provider-a"), endpoint("b", "provider-b"),
+                        endpoint("unknown", "unknown")])
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["endpoints_qualifying"], 3)
+        self.assertEqual(result["operators_qualifying"], 2)
+        self.assertEqual(result["operator_ids_qualifying"], ["provider-a", "provider-b"])
+        self.assertEqual(result["quorum_operator_ids"], ["provider-a", "provider-b"])
+        self.assertEqual(result["reports"][2]["exclusion_reason"], "operator_identity_unknown")
+
+    def test_reserved_unknown_conflicting_view_blocks_two_named_operators(self):
+        result = check([endpoint("a", "provider-a"), endpoint("b", "provider-b"),
+                        endpoint("unknown", " UNKNOWN ", OTHER)])
+        self.assertEqual(result["status"], "unknown")
+        self.assertEqual(result["reason_code"], "block_hash_disagreement")
+        self.assertEqual(result["operators_qualifying"], 2)
+        self.assertEqual(result["quorum_operator_ids"], [])
+
+    def test_reserved_word_does_not_exclude_distinct_longer_ids(self):
+        result = check([endpoint("a", "unknown-provider"), endpoint("b", "provider-b")])
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["quorum_operator_ids"], ["provider-b", "unknown-provider"])
+
     def test_legacy_pairs_remain_callable_but_supply_no_operator_vote(self):
         entries = [("a", endpoint("a", None)[2]), ("b", endpoint("b", None)[2])]
         self.assertEqual(check(entries)["status"], "unknown")
