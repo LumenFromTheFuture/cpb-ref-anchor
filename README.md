@@ -74,24 +74,63 @@ canonical. osr21 named this explicitly (`coinbase/agentkit#1141`, round
 proves what that endpoint reports, not independently that the view is
 canonical."*
 
-`recheck_inclusion_multi_rpc()` is a stronger assurance mode for the same
-comparison: it queries several endpoints — meant to be run by distinct
-operators — and only returns `included`/`reorged` once enough of them
-(`min_endpoints`, default 2) independently agree. An endpoint that errors
-or reports the wrong `chain_id` is excluded from the count, never a vote
-either way; endpoints that disagree with each other produce `unknown`,
-never a resolved verdict in favor of either side. This directly covers
-osr21's fixture request — a consistently dishonest endpoint reporting
-the right `chain_id` but a fabricated block view cannot force a false
-`included` (it is outnumbered) or a false `reorged` (disagreement is
-never resolved) — see `verifier/verify_recheck_multi.py`.
+`recheck_inclusion_multi_rpc()` corroborates the same observation using
+**explicitly configured operator IDs**, not URL counts. Its policy lives in
+`verifier/rpc_quorum.py` (standard library only) and remains available from
+`verify.py`. Configure `(safe_alias, operator_id, query_fn)` triples:
 
-Two limits stated rather than left implicit: this mode still does not
-verify headers or receipts through a light-client or proof path (see
-`PROVENANCE.md`, "Future work"), and it cannot detect collusion between
-the configured endpoints themselves — corroboration raises the bar past
-trusting a single RPC, it does not remove the need to configure
-endpoints that are genuinely independently operated.
+```python
+endpoints = [
+    ("base-primary", "base", query_base),
+    ("provider-a-primary", "provider-a", query_provider_a),
+    ("provider-a-backup", "provider-a", query_provider_a_backup),
+]
+result = recheck_inclusion_multi_rpc(
+    block_number, recorded_block_hash, recorded_chain_id,
+    endpoints, min_endpoints=2,
+)
+```
+
+`min_endpoints` retains its existing name but counts **distinct qualifying
+operators**. IDs are trimmed, casefolded ASCII slugs containing letters,
+digits, `.`, `_`, or `-`. `Provider-A` and ` provider-a ` are one operator.
+Missing/blank/invalid IDs contribute **zero**, not one shared "unknown"
+vote. Legacy `(alias, query_fn)` pairs remain callable but have no operator
+identity; two such entries plus one identified operator do not make a
+two-operator quorum. Migrate those callers to explicit triples.
+
+Unreachable, wrong-chain and malformed responses are excluded. All
+qualifying chain-view observations must agree **before operator
+deduplication**, including unknown-operator observations: a conflicting
+response from one operator's second URL must not disappear through a
+"first URL wins" shortcut. Disagreement returns `unknown`; this is not
+majority voting. Matching client versions/block hashes neither establish
+identity nor merge different configured operator IDs.
+
+The result separates `endpoints_queried`, `endpoints_qualifying`, and
+`operators_qualifying`, exposes `operator_ids_qualifying`, and sets
+`quorum_operator_ids` only when a verdict is reached. `reports` lists safe
+aliases, normalized IDs and exclusion codes such as `query_error`,
+`wrong_chain_id`, `invalid_block_hash`, and `operator_identity_unknown`.
+Use non-secret aliases; URL-like labels are replaced with positional
+aliases, and raw exception messages are not echoed because RPC errors
+can contain API credentials.
+
+**Trust boundary:** `assurance="configured-operator-corroboration"` means
+agreement under the supplied identity mapping, not authenticated provider
+identities, proven operational independence, chain finality, collusion
+resistance, or light-client/proof verification. Giving one backend two
+different IDs remains a configuration error this verifier cannot detect.
+
+Deterministic regression coverage (no network, signature dependencies or
+onchain transactions):
+
+```bash
+python3 -m unittest discover -s verifier -p 'test_rpc_quorum.py' -v
+```
+
+`verifier/verify_recheck_multi.py` retains the separately labeled live-RPC
+example and synthetic scenarios, updated to explicit operator IDs.
 
 ## Negative fixtures
 

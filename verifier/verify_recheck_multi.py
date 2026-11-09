@@ -8,8 +8,8 @@ explicit ask: "if there's disagreement or unverifiable data, the result
 should remain unknown," plus a fixture modeling "a consistently dishonest
 endpoint that reports the expected chain ID but a fabricated block view."
 
-Every [LIVE-RPC EVIDENCE] case below makes real RPC calls to real,
-independently-operated Base mainnet endpoints (mainnet.base.org -- the
+Every [LIVE-RPC EVIDENCE] case below makes real RPC calls to Base mainnet
+endpoints with explicitly configured operator IDs (mainnet.base.org -- the
 Base protocol team's own node -- and base.drpc.org -- dRPC, a distinct
 operator; both were cross-checked against five more public endpoints
 (base.publicnode.com, base-rpc.publicnode.com, 1rpc.io/base,
@@ -34,7 +34,8 @@ REAL_ANCHOR_BLOCK = 53311834
 REAL_ANCHOR_BLOCK_HASH = "0x2fab867fbeb512526683693bcf64e473056c3e9728d51c420e14a98f275d3ab4"
 REAL_ANCHOR_CHAIN_ID = 8453  # Base mainnet
 
-# Two real, independently-operated public Base mainnet RPC endpoints.
+# Two real public Base mainnet RPC endpoints, with operator IDs supplied below.
+# The configuration is an assumption, not proof of operator independence.
 # Verified by hand (curl, outside this test) to agree with each other and
 # with mainnet.base.org on REAL_ANCHOR_BLOCK_HASH before being wired in here.
 REAL_ENDPOINT_A = "https://mainnet.base.org"       # Base protocol team
@@ -65,13 +66,14 @@ def main():
     # "included" with endpoints_qualifying=2 when both genuinely agree.
     result = recheck_inclusion_multi_rpc(
         REAL_ANCHOR_BLOCK, REAL_ANCHOR_BLOCK_HASH, REAL_ANCHOR_CHAIN_ID,
-        endpoints=[("mainnet.base.org", real(REAL_ENDPOINT_A)),
-                   ("base.drpc.org", real(REAL_ENDPOINT_B))],
+        endpoints=[("mainnet.base.org", "base", real(REAL_ENDPOINT_A)),
+                   ("base.drpc.org", "drpc", real(REAL_ENDPOINT_B))],
     )
     assert result["status"] == "included", f"expected included, got {result}"
     assert result["endpoints_qualifying"] == 2
     assert result["checked_at"]
-    print(f"[LIVE-RPC EVIDENCE] two independently-operated endpoints agree: {result['status']}")
+    assert result["operators_qualifying"] == 2
+    print(f"[LIVE-RPC EVIDENCE] two configured operators agree: {result['status']}")
     print(f"                    endpoints_qualifying={result['endpoints_qualifying']}/{result['endpoints_queried']}"
           f"  checked_at={result['checked_at']}")
 
@@ -86,8 +88,8 @@ def main():
     dishonest = fixed(REAL_ANCHOR_CHAIN_ID, fabricated_block_view)
     result = recheck_inclusion_multi_rpc(
         REAL_ANCHOR_BLOCK, REAL_ANCHOR_BLOCK_HASH, REAL_ANCHOR_CHAIN_ID,
-        endpoints=[("mainnet.base.org (honest)", real(REAL_ENDPOINT_A)),
-                   ("fabricated-liar (dishonest)", dishonest)],
+        endpoints=[("mainnet.base.org (honest)", "base", real(REAL_ENDPOINT_A)),
+                   ("fabricated-liar (dishonest)", "simulated-liar", dishonest)],
     )
     assert result["status"] == "unknown", f"expected unknown, got {result}"
     assert result["endpoints_qualifying"] == 2  # both qualify (right chain_id, a hash) -- they just disagree
@@ -102,7 +104,7 @@ def main():
     # to raise the bar past.
     result = recheck_inclusion_multi_rpc(
         REAL_ANCHOR_BLOCK, REAL_ANCHOR_BLOCK_HASH, REAL_ANCHOR_CHAIN_ID,
-        endpoints=[("mainnet.base.org (alone)", real(REAL_ENDPOINT_A))],
+        endpoints=[("mainnet.base.org (alone)", "base", real(REAL_ENDPOINT_A))],
     )
     assert result["status"] == "unknown", f"expected unknown, got {result}"
     assert "need >=" in result["reason"]
@@ -118,8 +120,8 @@ def main():
     wrong_chain = fixed(REAL_ANCHOR_CHAIN_ID + 1, REAL_ANCHOR_BLOCK_HASH)
     result = recheck_inclusion_multi_rpc(
         REAL_ANCHOR_BLOCK, REAL_ANCHOR_BLOCK_HASH, REAL_ANCHOR_CHAIN_ID,
-        endpoints=[("mainnet.base.org", real(REAL_ENDPOINT_A)),
-                   ("wrong-network", wrong_chain)],
+        endpoints=[("mainnet.base.org", "base", real(REAL_ENDPOINT_A)),
+                   ("wrong-network", "simulated-wrong-chain", wrong_chain)],
     )
     assert result["status"] == "unknown", f"expected unknown, got {result}"
     assert result["endpoints_qualifying"] == 1  # only the real endpoint qualifies
@@ -132,8 +134,8 @@ def main():
     # same "need >= min_endpoints" floor as the single-endpoint case.
     result = recheck_inclusion_multi_rpc(
         REAL_ANCHOR_BLOCK, REAL_ANCHOR_BLOCK_HASH, REAL_ANCHOR_CHAIN_ID,
-        endpoints=[("mainnet.base.org", real(REAL_ENDPOINT_A)),
-                   ("down-endpoint", unreachable())],
+        endpoints=[("mainnet.base.org", "base", real(REAL_ENDPOINT_A)),
+                   ("down-endpoint", "simulated-down", unreachable())],
     )
     assert result["status"] == "unknown", f"expected unknown, got {result}"
     assert result["endpoints_qualifying"] == 1
@@ -151,8 +153,8 @@ def main():
     reorged_hash = "0x" + "77" * 32
     result = recheck_inclusion_multi_rpc(
         REAL_ANCHOR_BLOCK, REAL_ANCHOR_BLOCK_HASH, REAL_ANCHOR_CHAIN_ID,
-        endpoints=[("simulated-A-post-reorg", fixed(REAL_ANCHOR_CHAIN_ID, reorged_hash)),
-                   ("simulated-B-post-reorg", fixed(REAL_ANCHOR_CHAIN_ID, reorged_hash))],
+        endpoints=[("simulated-A-post-reorg", "simulated-a", fixed(REAL_ANCHOR_CHAIN_ID, reorged_hash)),
+                   ("simulated-B-post-reorg", "simulated-b", fixed(REAL_ANCHOR_CHAIN_ID, reorged_hash))],
     )
     assert result["status"] == "reorged", f"expected reorged, got {result}"
     assert result["endpoints_qualifying"] == 2
