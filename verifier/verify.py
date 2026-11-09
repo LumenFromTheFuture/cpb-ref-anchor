@@ -17,6 +17,11 @@ import json
 import sys
 import urllib.request
 
+if __package__:
+    from .rpc_quorum import recheck_inclusion_multi_rpc
+else:
+    from rpc_quorum import recheck_inclusion_multi_rpc
+
 import rfc8785
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.exceptions import InvalidSignature
@@ -271,99 +276,6 @@ def recheck_inclusion(block_number, recorded_block_hash, recorded_chain_id):
             "block_hash": current_hash}
 
 
-def recheck_inclusion_multi_rpc(block_number, recorded_block_hash, recorded_chain_id,
-                                 endpoints, min_endpoints=2):
-    """Stronger assurance mode than recheck_inclusion() -- per osr21's
-    follow-up in coinbase/agentkit#1141 (round 13): matching chain_id and a
-    block hash from ONE RPC endpoint proves what that endpoint reports, not
-    independently that its view is canonical. This queries `endpoints` (a
-    list of (label, query_fn) pairs, each query_fn(block_number) ->
-    {"chain_id": int, "block_hash": str} or raising on failure) and only
-    produces a verdict once enough of them -- meant to be run by distinct
-    operators, never the same backend reachable under two URLs -- agree.
-
-    Returns a dict:
-        {"status": "included" | "reorged" | "unknown",
-         "checked_at": <ISO-8601 UTC timestamp of this call>,
-         "block": block_number,
-         "endpoints_queried": <int>, "endpoints_qualifying": <int>,
-         "block_hash": <the agreed hash, present only when a verdict was reached>,
-         "reason": <present only when status == "unknown">}
-
-    Rules, applied in order, same fail-to-unknown discipline as
-    recheck_inclusion()'s chain_id guard:
-      1. An endpoint QUALIFIES only if it is reachable AND reports
-         recorded_chain_id AND returns a block hash. One that errors,
-         times out, or reports the wrong chain_id does not qualify --
-         it is excluded from the count entirely, never a vote in either
-         direction.
-      2. Fewer than min_endpoints qualifying endpoints -> 'unknown': not
-         enough independent corroboration to produce a verdict at all,
-         regardless of what the qualifying ones said.
-      3. Qualifying endpoints that do not ALL report the SAME block hash
-         -> 'unknown'. This is unanimity among qualifying endpoints, not
-         a majority vote -- a single dishonest or inconsistent endpoint
-         among several honest ones still yields 'unknown', by design:
-         this function does not claim Byzantine fault tolerance it was
-         never built to provide. This is also the dishonest-endpoint
-         case osr21 named: an endpoint that reports the right chain_id
-         but a fabricated block view cannot poison the result into a
-         false 'included' (it is contradicted, never trusted on its
-         own), and it cannot force a false 'reorged' either --
-         disagreement is never resolved in favor of either side.
-      4. Only once >= min_endpoints qualifying endpoints unanimously
-         report ONE block hash does this return a verdict: 'included'
-         if that hash matches recorded_block_hash, 'reorged' if the
-         independently-queried endpoints agree with each other on a
-         different one.
-
-    Two honest limits, stated rather than left implicit: this still does
-    not verify headers or receipts through a light-client or proof path --
-    it corroborates RPC responses against each other, it does not prove
-    any of them against an independently-verifiable chain commitment (see
-    PROVENANCE.md, 'Future work', for why that path is not built here).
-    And it cannot detect collusion: if >= min_endpoints configured
-    endpoints are actually the same operator under different URLs, or are
-    independently compromised and happen to agree, this reports what they
-    agree on. Corroboration raises the bar past trusting a single RPC; it
-    does not remove the need for the caller to configure endpoints that
-    are genuinely independently operated."""
-    checked_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    reports = []
-    for label, query_fn in endpoints:
-        try:
-            r = query_fn(block_number)
-            reports.append({"label": label, "chain_id": r.get("chain_id"), "block_hash": r.get("block_hash")})
-        except Exception as e:
-            reports.append({"label": label, "chain_id": None, "block_hash": None, "error": str(e)})
-
-    qualifying = [r for r in reports if r.get("chain_id") == recorded_chain_id and r.get("block_hash")]
-
-    if len(qualifying) < min_endpoints:
-        return {
-            "status": "unknown", "checked_at": checked_at, "block": block_number,
-            "endpoints_queried": len(endpoints), "endpoints_qualifying": len(qualifying),
-            "reason": (f"only {len(qualifying)}/{len(endpoints)} endpoints confirmed chain_id "
-                       f"{recorded_chain_id} and returned a block hash; need >= {min_endpoints}"),
-        }
-
-    distinct_hashes = {r["block_hash"].lower() for r in qualifying}
-    if len(distinct_hashes) > 1:
-        return {
-            "status": "unknown", "checked_at": checked_at, "block": block_number,
-            "endpoints_queried": len(endpoints), "endpoints_qualifying": len(qualifying),
-            "reason": f"qualifying endpoints disagree on the block hash at this height: {sorted(distinct_hashes)}",
-        }
-
-    agreed_hash = next(iter(distinct_hashes))
-    status = "included" if agreed_hash == recorded_block_hash.lower() else "reorged"
-    return {
-        "status": status, "checked_at": checked_at, "block": block_number,
-        "endpoints_queried": len(endpoints), "endpoints_qualifying": len(qualifying),
-        "block_hash": agreed_hash,
-    }
-
-
 def main(artifacts_dir="artifacts", tx_hash=None):
     log_doc = load(f"{artifacts_dir}/log.json")
     checkpoint = load(f"{artifacts_dir}/checkpoint.json")
@@ -416,7 +328,7 @@ def main(artifacts_dir="artifacts", tx_hash=None):
         print("     -> labeled TRUSTED-RPC VERIFICATION per osr21's round-13 point: this proves")
         print("        what the configured RPC endpoint reports, not independently that its")
         print("        view is canonical. recheck_inclusion_multi_rpc() corroborates across")
-        print("        several independently-operated endpoints instead of trusting one.")
+        print("        endpoints with explicitly configured operator IDs instead of trusting one.")
     else:
         print()
         print("[skip] no tx_hash given -- not anchored yet, on-chain check skipped")

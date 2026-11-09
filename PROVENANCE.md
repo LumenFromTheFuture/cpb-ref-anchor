@@ -106,3 +106,13 @@ build than a verifier script, out of proportion to this example's scope.
 Not built now, same discipline as everything else in this section:
 recorded so the gap is explicit rather than quietly left for the
 multi-RPC mode to be mistaken for a complete answer to it.
+
+Operator-quorum follow-up from `coinbase/agentkit#1141`: the policy now
+counts distinct explicit, normalized operator IDs, never URL/label count.
+Missing, invalid and reserved `unknown` IDs supply zero votes, including
+case/whitespace variants. Conflicting chain views remain `unknown`
+before deduplicating operators. This is configured-operator corroboration:
+the mapping is supplied by the caller, not authenticated or independently
+proven by client-version strings, block hashes, or this verifier.
+`verifier/test_rpc_quorum.py` is deterministic synthetic coverage only;
+it makes no RPC calls and does not reproduce a real chain reorg.
