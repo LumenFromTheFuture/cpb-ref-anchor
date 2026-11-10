@@ -9,7 +9,12 @@ import datetime
 def _operator_id(value):
     if not isinstance(value, str):
         return None
-    normalized = value.strip().casefold()
+    # Reject non-ASCII BEFORE any case normalization: casefold() would otherwise
+    # merge distinct IDs (e.g. "Straße"/"strasse", KELVIN SIGN/"k") into one operator.
+    stripped = value.strip(" \t")
+    if not stripped.isascii():
+        return None
+    normalized = stripped.lower()
     # A reserved diagnostic bucket is not a configured operator identity.
     if normalized == "unknown":
         return None
@@ -44,8 +49,8 @@ def recheck_inclusion_multi_rpc(block_number, recorded_block_hash, recorded_chai
     they contribute ZERO to the strict quorum, not one shared "unknown" vote.
 
     min_endpoints retains its API name but now counts distinct normalized
-    operator IDs, never URLs or labels. IDs are trimmed and casefolded ASCII
-    slugs (letters, digits, dot, underscore, hyphen); missing/invalid IDs and
+    operator IDs, never URLs or labels. IDs are trimmed (ASCII space/tab only) and lowercased ASCII
+    slugs; non-ASCII input is rejected before lowercasing (letters, digits, dot, underscore, hyphen); missing/invalid IDs and
     the reserved ID "unknown" do not qualify. The configuration's identity
     mapping is assumed, not authenticated.
 
