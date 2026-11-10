@@ -4,17 +4,32 @@ Standard-library only so the quorum policy can be tested without RPC access
 or the signature verifier's cryptographic dependencies.
 """
 import datetime
+import re
+
+
+_ID_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$")
 
 
 def _operator_id(value):
     if not isinstance(value, str):
         return None
-    normalized = value.strip().casefold()
+    # Strip only ASCII spaces and horizontal tabs; preserve other whitespace
+    # so leading/trailing newlines or vertical tabs are caught as invalid.
+    stripped = value.strip(" \t")
+    # Reject non-ASCII characters before any case folding — prevents
+    # casefold-driven Unicode merges (e.g. "Straße"→"strasse", "K"→"k")
+    # from creating unintended operator-ID collisions.
+    if any(ord(c) > 127 for c in stripped):
+        return None
+    normalized = stripped.lower()
     # A reserved diagnostic bucket is not a configured operator identity.
     if normalized == "unknown":
         return None
-    allowed = "abcdefghijklmnopqrstuvwxyz0123456789._-"
-    return normalized if normalized and all(c in allowed for c in normalized) else None
+    # Require a 1-64-char slug: alphanumeric start and end, only
+    # alphanumeric / dot / underscore / hyphen in between.
+    if not _ID_PATTERN.match(normalized):
+        return None
+    return normalized
 
 
 def _block_hash(value):
@@ -44,9 +59,11 @@ def recheck_inclusion_multi_rpc(block_number, recorded_block_hash, recorded_chai
     they contribute ZERO to the strict quorum, not one shared "unknown" vote.
 
     min_endpoints retains its API name but now counts distinct normalized
-    operator IDs, never URLs or labels. IDs are trimmed and casefolded ASCII
-    slugs (letters, digits, dot, underscore, hyphen); missing/invalid IDs and
-    the reserved ID "unknown" do not qualify. The configuration's identity
+    operator IDs, never URLs or labels. IDs are trimmed (ASCII space/tab),
+    lowercased (not casefolded — Unicode variants are rejected before
+    lowering), and validated as 1-64-char ASCII slugs
+    ([a-z0-9][a-z0-9._-]{0,62}[a-z0-9]); missing/invalid IDs and the
+    reserved ID "unknown" do not qualify. The configuration's identity
     mapping is assumed, not authenticated.
 
     All reachable, correct-chain, well-formed hash observations must agree,

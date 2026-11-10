@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from rpc_quorum import recheck_inclusion_multi_rpc
+from rpc_quorum import recheck_inclusion_multi_rpc, _operator_id
 
 CHAIN = 8453
 HEIGHT = 123
@@ -162,6 +162,27 @@ class OperatorQuorumTests(unittest.TestCase):
                 result = check([endpoint("a", "a"), ("b", "b", lambda _, r=response: r)])
                 self.assertEqual(result["status"], "unknown")
                 self.assertEqual(result["operators_qualifying"], 1)
+
+    def test_non_ascii_operator_ids_are_rejected_before_lowering(self):
+        # Unicode variants that casefold to ASCII — e.g. "Straße" -> "strasse",
+        # Kelvin sign "K" -> "k" — must be rejected to prevent unintended
+        # operator-ID collisions.  Rejection happens BEFORE lowering.
+        for non_ascii in ("Straße", "\u212a", "café", "Ñ", "über"):
+            with self.subTest(operator=non_ascii):
+                result = check([endpoint("a", "provider-a"), endpoint("b", non_ascii)])
+                self.assertEqual(result["status"], "unknown")
+                self.assertIsNone(result["reports"][1]["operator_id"])
+                self.assertEqual(result["operators_qualifying"], 1)
+                self.assertEqual(result["operator_ids_qualifying"], ["provider-a"])
+
+    def test_non_ascii_does_not_merge_into_ascii_counterpart(self):
+        # "Straße" (rejected) and "strasse" (valid) should be distinct:
+        # one rejected, one qualifying — not merged into a single vote.
+        result = check([endpoint("a", "Straße"), endpoint("b", "strasse")])
+        self.assertEqual(result["status"], "unknown")
+        self.assertEqual(result["operators_qualifying"], 1)
+        self.assertEqual(result["operator_ids_qualifying"], ["strasse"])
+        self.assertIsNone(result["reports"][0]["operator_id"])
 
     def test_invalid_operator_ids_are_unknown_and_not_echoed(self):
         for operator in (42, [], {}, "https://secret.invalid?key=secret", "  "):
