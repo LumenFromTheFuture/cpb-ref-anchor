@@ -49,10 +49,12 @@ def recheck_inclusion_multi_rpc(block_number, recorded_block_hash, recorded_chai
     they contribute ZERO to the strict quorum, not one shared "unknown" vote.
 
     min_endpoints retains its API name but now counts distinct normalized
-    operator IDs, never URLs or labels. IDs are trimmed (ASCII space/tab only) and lowercased ASCII
-    slugs; non-ASCII input is rejected before lowercasing (letters, digits, dot, underscore, hyphen); missing/invalid IDs and
-    the reserved ID "unknown" do not qualify. The configuration's identity
-    mapping is assumed, not authenticated.
+    operator IDs, never URLs or labels. An ID is trimmed (ASCII space/tab
+    only); non-ASCII input is rejected before any case normalization; the rest
+    is lowercased and must consist only of ASCII letters, digits, dot,
+    underscore and hyphen (no length or start/end-character rule). Missing or
+    invalid IDs and the reserved ID "unknown" do not qualify. The
+    configuration's identity mapping is assumed, not authenticated.
 
     All reachable, correct-chain, well-formed hash observations must agree,
     including multiple URLs for one operator and entries with unknown identity.
