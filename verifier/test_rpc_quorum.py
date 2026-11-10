@@ -196,5 +196,30 @@ class OperatorQuorumTests(unittest.TestCase):
                 self.assertEqual(result["reports"][1]["exclusion_reason"], "invalid_endpoint_config")
 
 
+class OperatorIdNormalizationTests(unittest.TestCase):
+    def test_non_ascii_id_contributes_zero_votes(self):
+        # Old casefold() turned these into valid IDs "strasse" / "k" and counted a vote.
+        for bad in ["Stra\u00dfe", "\u212a"]:
+            result = check([endpoint("a", bad)], minimum=1)
+            self.assertEqual(result["operators_qualifying"], 0, bad)
+            self.assertEqual(result["reason_code"], "insufficient_operators", bad)
+
+    def test_non_ascii_id_cannot_pair_with_ascii_lookalike_to_reach_quorum(self):
+        for bad, good in [("Stra\u00dfe", "strasse"), ("\u212a", "k")]:
+            result = check([endpoint("a", bad), endpoint("b", good)], minimum=2)
+            self.assertEqual(result["operators_qualifying"], 1, bad)
+            self.assertEqual(result["quorum_operator_ids"], [])
+
+    def test_punctuation_variants_stay_distinct(self):
+        result = check([endpoint("a", "provider.a"), endpoint("b", "provider-a")])
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["operators_qualifying"], 2)
+
+    def test_reserved_unknown_still_disagrees_but_does_not_vote(self):
+        result = check([endpoint("a", "provider-a"), endpoint("b", "provider-b"),
+                        endpoint("c", "UNKNOWN", block_hash=OTHER)])
+        self.assertEqual(result["status"], "unknown")
+
+
 if __name__ == "__main__":
     unittest.main()
