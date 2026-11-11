@@ -221,5 +221,125 @@ class OperatorIdNormalizationTests(unittest.TestCase):
         self.assertEqual(result["status"], "unknown")
 
 
+def _config_boundary(raw):
+    """Test-side illustration of a config-reader boundary (not shipped API).
+
+    A reader that accepts a line terminator removes EXACTLY ONE trailing
+    terminator (CRLF, LF or CR) at the parse edge, then hands the result to
+    the strict canonicalizer unchanged. The strict _operator_id never widens.
+    """
+    for terminator in ("\r\n", "\n", "\r"):
+        if raw.endswith(terminator):
+            return raw[:-len(terminator)]
+    return raw
+
+
+class OperatorIdLineTerminatorTests(unittest.TestCase):
+    """LF / CRLF / embedded-newline fixtures against the strict _operator_id.
+
+    Policy pinned here: only ASCII space and tab are trimmed. Any other
+    whitespace/control character (including line terminators) makes the ID
+    invalid: zero votes, operator_id None, stable exclusion reason
+    "operator_identity_unknown", and the raw value is never echoed.
+    """
+
+    INVALID = {
+        "trailing_lf": "provider-a\n",
+        "trailing_crlf": "provider-a\r\n",
+        "trailing_cr": "provider-a\r",
+        "leading_lf": "\nprovider-a",
+        "embedded_lf": "provider\na",
+        "embedded_crlf": "provider\r\na",
+        "double_trailing_lf": "provider-a\n\n",
+        "vertical_tab": "provider-a\x0b",
+        "form_feed": "provider-a\x0c",
+        "nul": "provider-a\x00",
+        "next_line_u0085": "provider-a\u0085",
+        "line_separator_u2028": "provider-a\u2028",
+        "lf_only": "\n",
+    }
+
+    def test_line_terminator_ids_are_rejected_with_zero_votes(self):
+        for name, bad in self.INVALID.items():
+            with self.subTest(case=name):
+                result = check([endpoint("a", bad), endpoint("b", "provider-b")])
+                self.assertIsNone(result["reports"][0]["operator_id"])
+                self.assertFalse(result["reports"][0]["counts_toward_quorum"])
+                self.assertEqual(result["reports"][0]["exclusion_reason"], "operator_identity_unknown")
+                self.assertEqual(result["operators_qualifying"], 1)
+                self.assertEqual(result["status"], "unknown")
+                self.assertEqual(result["reason_code"], "insufficient_operators")
+                self.assertEqual(result["quorum_operator_ids"], [])
+
+    def test_line_terminator_id_cannot_pair_with_its_clean_twin(self):
+        for name, bad in self.INVALID.items():
+            if name in ("lf_only", "embedded_lf", "embedded_crlf"):
+                continue
+            with self.subTest(case=name):
+                result = check([endpoint("a", bad), endpoint("b", "provider-a")])
+                self.assertEqual(result["operators_qualifying"], 1)
+                self.assertEqual(result["status"], "unknown")
+
+    def test_line_terminator_ids_are_not_echoed_in_output(self):
+        for bad in ("https://secret.invalid/x?k=secret\n", "secret\r\nvalue"):
+            result = check([endpoint("a", "a"), endpoint("b", bad)])
+            self.assertIsNone(result["reports"][1]["operator_id"])
+            self.assertNotIn("secret", json.dumps(result))
+
+    def test_exclusion_reason_stays_chain_reason_when_endpoint_also_fails(self):
+        result = check([endpoint("a", "a"), endpoint("b", "provider-b\n", chain_id=1)])
+        self.assertEqual(result["reports"][1]["exclusion_reason"], "wrong_chain_id")
+        self.assertIsNone(result["reports"][1]["operator_id"])
+        self.assertEqual(result["operators_qualifying"], 1)
+
+    def test_boundary_strips_exactly_one_terminator_then_strict_applies(self):
+        ok = [("provider-a\n", "provider-a"), ("provider-a\r\n", "provider-a"),
+              ("provider-a\r", "provider-a"), (" Provider-A\t\n", "provider-a")]
+        for raw, expected in ok:
+            with self.subTest(raw=raw):
+                result = check([endpoint("a", _config_boundary(raw)), endpoint("b", "provider-b")])
+                self.assertEqual(result["status"], "included")
+                self.assertEqual(result["quorum_operator_ids"], sorted([expected, "provider-b"]))
+        for raw in ("provider-a\n\n", "provider-a\r\n\r\n", "provider\na\n", "provider-a\x0b\n"):
+            with self.subTest(raw=raw):
+                result = check([endpoint("a", _config_boundary(raw)), endpoint("b", "provider-b")])
+                self.assertEqual(result["operators_qualifying"], 1)
+                self.assertEqual(result["status"], "unknown")
+
+
+class OperatorIdPositiveAndNonAsciiFixtures(unittest.TestCase):
+    def test_dot_and_hyphen_variants_are_two_operators(self):
+        # Run 2026-11-10: provider.a + provider-a => 2 distinct operators.
+        result = check([endpoint("a", "provider.a"), endpoint("b", "provider-a")])
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["operators_qualifying"], 2)
+        self.assertEqual(result["quorum_operator_ids"], ["provider-a", "provider.a"])
+
+    def test_space_tab_trim_and_case_fold_are_one_operator(self):
+        result = check([endpoint("a", " Provider-A\t"), endpoint("b", "provider-a")])
+        self.assertEqual(result["operators_qualifying"], 1)
+        self.assertEqual(result["reason_code"], "insufficient_operators")
+
+    def test_non_ascii_ids_get_zero_votes_and_stable_reason(self):
+        bad_ids = ["Stra\u00dfe", "\u212a", "provider-\u00e1", "\uff50rovider-a",
+                   "provider-a\u00a0", "\u0131", "provider-a\u200b"]
+        for bad in bad_ids:
+            with self.subTest(operator=bad):
+                result = check([endpoint("a", bad), endpoint("b", "provider-b")])
+                self.assertIsNone(result["reports"][0]["operator_id"])
+                self.assertEqual(result["reports"][0]["exclusion_reason"], "operator_identity_unknown")
+                self.assertEqual(result["operators_qualifying"], 1)
+                self.assertEqual(result["status"], "unknown")
+
+    def test_url_label_gets_safe_alias_and_no_raw_url_in_output(self):
+        url = "https://user:secret@rpc.invalid/path?key=secret"
+        result = check([(url, "provider-a", lambda _: {"chain_id": CHAIN, "block_hash": HASH}),
+                        endpoint("b", "provider-b\n")])
+        self.assertEqual(result["reports"][0]["label"], "endpoint-1")
+        self.assertEqual(result["reports"][0]["operator_id"], "provider-a")
+        self.assertNotIn("secret", json.dumps(result))
+        self.assertNotIn("rpc.invalid", json.dumps(result))
+
+
 if __name__ == "__main__":
     unittest.main()
